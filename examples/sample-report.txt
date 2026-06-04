@@ -1,0 +1,27 @@
+Codex Windows Plugin Doctor
+Generated: 2026-06-04T14:00:00
+Platform: Microsoft Windows NT 10.0.26100.0
+Codex home: C:\Users\example\.codex
+
+[ok] Codex home directory
+  C:\Users\example\.codex
+
+[ok] Codex config.toml
+  C:\Users\example\.codex\config.toml
+
+[ok] Configured bundled plugin: browser
+  Found in config.toml.
+
+[ok] Configured bundled plugin: chrome
+  Found in config.toml.
+
+[warn] Configured bundled plugin: computer-use
+  Not found in config.toml.
+  Suggestion: Install or re-enable the computer-use plugin from Codex settings.
+
+[ok] OpenAI bundled marketplace
+  Configured.
+
+[warn] Chrome native messaging host registry entries
+  No Codex/OpenAI native host entries found in common Chrome registry locations.
+  Suggestion: If the Chrome plugin says Connected but Codex cannot control Chrome, reinstall the Chrome plugin and extension.
