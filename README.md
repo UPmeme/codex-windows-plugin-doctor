@@ -121,6 +121,11 @@ who need a structured local report.
 See [Computer Use troubleshooting](docs/computer-use-troubleshooting.md) and
 [Windows plugin troubleshooting](docs/windows-plugin-troubleshooting.md).
 
+## Share
+
+- [English share note](docs/share-en.md)
+- [中文传播短文](docs/share-zh-CN.md)
+
 ## Test
 
 ```powershell

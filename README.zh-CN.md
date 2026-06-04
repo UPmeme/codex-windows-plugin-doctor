@@ -111,6 +111,11 @@ Windows 上 Codex Computer Use / Chrome 插件问题通常不是单一原因。�
 
 不要贴 API key、OAuth token、私有仓库名或敏感截图。
 
+## 传播短文
+
+- [中文传播短文](docs/share-zh-CN.md)
+- [English share note](docs/share-en.md)
+
 ## 免责声明
 
 这是社区诊断工具，不是 OpenAI 官方项目。
