@@ -25,3 +25,8 @@ Codex home: C:\Users\example\.codex
 [warn] Chrome native messaging host registry entries
   No Codex/OpenAI native host entries found in common Chrome registry locations.
   Suggestion: If the Chrome plugin says Connected but Codex cannot control Chrome, reinstall the Chrome plugin and extension.
+
+Repair plan:
+  - Fix warn items from top to bottom before deleting caches or restoring backups.
+  - Computer Use local state is incomplete. Re-enable or reinstall the Computer Use plugin in Codex settings, then rerun this diagnostic.
+  - Chrome native messaging host was not found. Reconnect the Chrome plugin from Codex settings after installing the extension.

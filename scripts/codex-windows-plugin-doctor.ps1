@@ -105,6 +105,17 @@ if (Test-Path $cacheRoot) {
             -Status $(if ($matches) { "ok" } else { "warn" }) `
             -Detail $(if ($matches) { ($matches | ForEach-Object FullName) -join "; " } else { "No cached directory found." }) `
             -Suggestion $(if ($matches) { "" } else { "Reinstall the $plugin plugin in Codex settings." })
+
+        $skillMatches = Get-ChildItem -Path $cacheRoot -Recurse -File -Filter "SKILL.md" -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match "\\$plugin\\" } |
+            Select-Object -First 3
+
+        Add-Check `
+            -Id "skill-plugin-$plugin" `
+            -Title "Discoverable skill files: $plugin" `
+            -Status $(if ($skillMatches) { "ok" } else { "warn" }) `
+            -Detail $(if ($skillMatches) { ($skillMatches | ForEach-Object FullName) -join "; " } else { "No SKILL.md found for $plugin in plugin cache." }) `
+            -Suggestion $(if ($skillMatches) { "" } else { "The plugin cache may be incomplete. Reinstall or refresh the $plugin plugin." })
     }
 }
 else {
@@ -163,6 +174,34 @@ Add-Check `
     -Detail $(if ($hasExtension) { $extensionHits -join "; " } else { "Extension id hehggadaopoacecdllhhajmbjkdcmajg not found in common Chrome profiles." }) `
     -Suggestion $(if ($hasExtension) { "" } else { "Install the Codex Chrome extension from the Chrome Web Store and connect it from Codex settings." })
 
+$warnCount = @($checks | Where-Object { $_.status -eq "warn" }).Count
+$computerUseLocalOk = @($checks | Where-Object {
+    $_.id -in @("config-plugin-computer-use", "cache-plugin-computer-use", "skill-plugin-computer-use") -and $_.status -eq "ok"
+}).Count -eq 3
+
+$repairPlan = New-Object System.Collections.Generic.List[string]
+if ($warnCount -eq 0) {
+    $repairPlan.Add("Local plugin signals look healthy. If Computer Use is still unavailable in the active thread, restart Codex Desktop and create a fresh thread before changing files.")
+}
+else {
+    $repairPlan.Add("Fix warn items from top to bottom before deleting caches or restoring backups.")
+}
+
+if ($computerUseLocalOk) {
+    $repairPlan.Add("Computer Use config, cache, and skill files are present locally. If @computer is unavailable, the likely issue is active-thread tool exposure, plugin runtime attachment, workspace policy, or product rollout state.")
+}
+else {
+    $repairPlan.Add("Computer Use local state is incomplete. Re-enable or reinstall the Computer Use plugin in Codex settings, then rerun this diagnostic.")
+}
+
+if (-not $hasExtension) {
+    $repairPlan.Add("Chrome extension was not found in common profiles. Install the Codex Chrome extension if Chrome control is part of the failure.")
+}
+
+if (-not $hasNativeHosts) {
+    $repairPlan.Add("Chrome native messaging host was not found. Reconnect the Chrome plugin from Codex settings after installing the extension.")
+}
+
 $summary = [pscustomobject]@{
     tool = "codex-windows-plugin-doctor"
     version = "0.1.0"
@@ -170,6 +209,7 @@ $summary = [pscustomobject]@{
     platform = [System.Environment]::OSVersion.VersionString
     codex_home = $codexHome
     checks = $checks
+    repair_plan = $repairPlan
 }
 
 if ($Json) {
@@ -189,6 +229,10 @@ else {
             $lines.Add("  Suggestion: $($check.suggestion)")
         }
         $lines.Add("")
+    }
+    $lines.Add("Repair plan:")
+    foreach ($step in $repairPlan) {
+        $lines.Add("  - $step")
     }
     $output = $lines -join [Environment]::NewLine
 }
