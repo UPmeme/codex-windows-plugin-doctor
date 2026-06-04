@@ -25,8 +25,24 @@ the diagnostic separates local plugin state from active-thread tool exposure.
 Run:
 
 ```powershell
-.\scripts\codex-windows-plugin-doctor.ps1
+.\scripts\codex-computer-use-doctor.ps1
 ```
+
+To preview repair steps:
+
+```powershell
+.\scripts\codex-computer-use-doctor.ps1 -Repair
+```
+
+To apply the conservative repair workflow:
+
+```powershell
+.\scripts\codex-computer-use-doctor.ps1 -Repair -Apply
+```
+
+The apply mode backs up Codex config, mirrors the bundled plugin source when it
+can be found, registers the repaired marketplace source, reinstalls Browser,
+Chrome, and Computer Use, and then requires a Codex Desktop restart.
 
 If Computer Use config, cache, and skill files are present but the active thread
 still cannot use Computer Use, collect the report and try:

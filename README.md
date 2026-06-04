@@ -1,5 +1,7 @@
 # Codex Computer Use Doctor for Windows
 
+[中文说明](README.zh-CN.md)
+
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-5391FE)
 ![Platform](https://img.shields.io/badge/platform-Windows-0078D4)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -47,20 +49,37 @@ No dependencies are required beyond Windows PowerShell.
 Run:
 
 ```powershell
-.\scripts\codex-windows-plugin-doctor.ps1
+.\scripts\codex-computer-use-doctor.ps1
 ```
 
 Generate JSON:
 
 ```powershell
-.\scripts\codex-windows-plugin-doctor.ps1 -Json
+.\scripts\codex-computer-use-doctor.ps1 -Json
 ```
 
 Save a report:
 
 ```powershell
-.\scripts\codex-windows-plugin-doctor.ps1 -OutFile .\reports\codex-plugin-report.txt
+.\scripts\codex-computer-use-doctor.ps1 -OutFile .\reports\codex-plugin-report.txt
 ```
+
+Preview a repair plan:
+
+```powershell
+.\scripts\codex-computer-use-doctor.ps1 -Repair
+```
+
+Apply the repair plan:
+
+```powershell
+.\scripts\codex-computer-use-doctor.ps1 -Repair -Apply
+```
+
+`-Apply` backs up Codex config first, mirrors the bundled plugin source into the
+user `.codex` directory when a source is found, registers the repaired bundled
+marketplace, reinstalls Browser, Chrome, and Computer Use plugins, and asks you
+to restart Codex Desktop.
 
 ## Common Computer Use Symptom
 
@@ -81,12 +100,12 @@ The Codex Chrome extension says Connected, but Codex cannot control Chrome.
 
 This tool is read-only by default. It does not modify Codex configuration, clear
 caches, install extensions, edit registry keys, read credentials, or bypass
-workspace policy.
+workspace policy unless you explicitly pass `-Repair -Apply`.
 
-The first version intentionally reports what is missing before proposing a
-manual fix. Automatic repair is risky because Codex plugin state can involve
-config files, bundled marketplace cache, native messaging hosts, extension
-state, and per-thread tool exposure.
+Repair mode is intentionally conservative. It backs up local Codex state first
+and avoids reading credentials. It cannot fix active-thread tool exposure,
+workspace policy, or rollout restrictions; after repair you still need to
+restart Codex Desktop and create a fresh thread.
 
 It is not affiliated with OpenAI. It is a community diagnostic helper for users
 who need a structured local report.

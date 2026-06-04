@@ -3,9 +3,13 @@ $ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $script = Join-Path $root "scripts\codex-windows-plugin-doctor.ps1"
+$aliasScript = Join-Path $root "scripts\codex-computer-use-doctor.ps1"
 
 if (-not (Test-Path $script)) {
     throw "Diagnostic script not found: $script"
+}
+if (-not (Test-Path $aliasScript)) {
+    throw "Alias script not found: $aliasScript"
 }
 
 Write-Output "Running text output smoke test..."
@@ -30,6 +34,12 @@ $outFile = Join-Path $outDir "smoke-report.txt"
 & $script -OutFile $outFile | Out-Null
 if (-not (Test-Path $outFile)) {
     throw "OutFile was not created."
+}
+
+Write-Output "Running repair dry-run smoke test..."
+$repairText = & $aliasScript -Repair
+if ($repairText -notmatch "Repair actions") {
+    throw "Repair dry-run did not include repair actions."
 }
 
 Write-Output "Smoke tests passed."

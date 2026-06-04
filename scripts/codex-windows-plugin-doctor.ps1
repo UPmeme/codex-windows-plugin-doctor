@@ -1,6 +1,9 @@
 param(
     [switch]$Json,
-    [string]$OutFile
+    [string]$OutFile,
+    [switch]$Repair,
+    [switch]$Apply,
+    [string]$PluginSourcePath
 )
 
 Set-StrictMode -Version Latest
@@ -45,11 +48,113 @@ function Add-Check {
     $checks.Add((New-Check -Id $Id -Title $Title -Status $Status -Detail $Detail -Suggestion $Suggestion))
 }
 
+function Add-RepairAction {
+    param(
+        [string]$Id,
+        [string]$Title,
+        [string]$Reason,
+        [string]$Command,
+        [string]$Risk = "low"
+    )
+
+    $repairActions.Add([pscustomobject]@{
+        id = $Id
+        title = $Title
+        reason = $Reason
+        command = $Command
+        risk = $Risk
+        applied = $false
+        result = ""
+    })
+}
+
+function Get-CodexBundledSourceCandidate {
+    $candidates = New-Object System.Collections.Generic.List[string]
+
+    if ($PluginSourcePath) {
+        $candidates.Add($PluginSourcePath)
+    }
+
+    try {
+        Get-Process -Name "Codex" -ErrorAction SilentlyContinue |
+            Where-Object { $_.Path } |
+            ForEach-Object {
+                $processPath = $_.Path
+                $root = Split-Path -Parent $processPath
+                $candidate = Join-Path $root "resources\plugins\openai-bundled"
+                $candidates.Add($candidate)
+            }
+    }
+    catch {
+    }
+
+    $windowsApps = Join-Path $env:ProgramFiles "WindowsApps"
+    if (Test-Path $windowsApps) {
+        Get-ChildItem -Path $windowsApps -Directory -Filter "OpenAI.Codex_*" -ErrorAction SilentlyContinue |
+            ForEach-Object {
+                $candidate = Join-Path $_.FullName "app\resources\plugins\openai-bundled"
+                $candidates.Add($candidate)
+            }
+    }
+
+    return $candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+}
+
+function Invoke-External {
+    param([string]$FilePath, [string[]]$Arguments)
+
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $FilePath
+    foreach ($arg in $Arguments) {
+        [void]$psi.ArgumentList.Add($arg)
+    }
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.UseShellExecute = $false
+    $process = [System.Diagnostics.Process]::Start($psi)
+    $process.WaitForExit()
+    return [pscustomobject]@{
+        exit_code = $process.ExitCode
+        stdout = $process.StandardOutput.ReadToEnd()
+        stderr = $process.StandardError.ReadToEnd()
+    }
+}
+
+function Copy-DirectoryBytes {
+    param(
+        [string]$Source,
+        [string]$Destination
+    )
+
+    if (-not (Test-Path $Source)) {
+        throw "Source directory does not exist: $Source"
+    }
+
+    New-Item -ItemType Directory -Force $Destination | Out-Null
+
+    Get-ChildItem -Path $Source -Recurse -Directory -ErrorAction Stop | ForEach-Object {
+        $relative = $_.FullName.Substring($Source.Length).TrimStart("\", "/")
+        $target = Join-Path $Destination $relative
+        New-Item -ItemType Directory -Force $target | Out-Null
+    }
+
+    Get-ChildItem -Path $Source -Recurse -File -ErrorAction Stop | ForEach-Object {
+        $relative = $_.FullName.Substring($Source.Length).TrimStart("\", "/")
+        $target = Join-Path $Destination $relative
+        $targetDirectory = Split-Path -Parent $target
+        if ($targetDirectory -and -not (Test-Path $targetDirectory)) {
+            New-Item -ItemType Directory -Force $targetDirectory | Out-Null
+        }
+        [System.IO.File]::WriteAllBytes($target, [System.IO.File]::ReadAllBytes($_.FullName))
+    }
+}
+
 $codexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE ".codex" }
 $configPath = Join-Path $codexHome "config.toml"
 $pluginsRoot = Join-Path $codexHome "plugins"
 $cacheRoot = Join-Path $pluginsRoot "cache"
 $checks = New-Object System.Collections.Generic.List[object]
+$repairActions = New-Object System.Collections.Generic.List[object]
 
 $codexHomeExists = Test-Path $codexHome
 Add-Check `
@@ -202,6 +307,130 @@ if (-not $hasNativeHosts) {
     $repairPlan.Add("Chrome native messaging host was not found. Reconnect the Chrome plugin from Codex settings after installing the extension.")
 }
 
+if ($Repair) {
+    $backupDir = Join-Path $codexHome ("backups\plugin-doctor-" + (Get-Date -Format "yyyyMMdd-HHmmss"))
+    Add-RepairAction `
+        -Id "backup-codex-state" `
+        -Title "Back up Codex configuration" `
+        -Reason "Repair should preserve config.toml and global state before changing plugin marketplace or plugin installation." `
+        -Command "New-Item -ItemType Directory -Force `"$backupDir`"; Copy-Item `"$configPath`" `"$backupDir`" -Force; Copy-Item `"$codexHome\codex-global-state.json`" `"$backupDir`" -Force -ErrorAction SilentlyContinue"
+
+    $bundledSource = Get-CodexBundledSourceCandidate
+    $fixedSource = Join-Path $codexHome "plugins\sources\openai-bundled-fixed"
+    if ($bundledSource) {
+        Add-RepairAction `
+            -Id "mirror-bundled-source" `
+            -Title "Mirror OpenAI bundled plugin source to user directory" `
+            -Reason "WindowsApps package files may be protected. Mirroring the bundled plugin source avoids direct install from protected app package paths." `
+            -Command "Byte-copy `"$bundledSource`" to `"$fixedSource`"." `
+            -Risk "medium"
+    }
+    else {
+        Add-RepairAction `
+            -Id "mirror-bundled-source" `
+            -Title "Mirror OpenAI bundled plugin source to user directory" `
+            -Reason "No bundled plugin source path was found automatically." `
+            -Command "Rerun with -PluginSourcePath pointing at app\resources\plugins\openai-bundled." `
+            -Risk "medium"
+    }
+
+    $codexCommand = Get-Command "codex" -ErrorAction SilentlyContinue
+    if ($codexCommand) {
+        Add-RepairAction `
+            -Id "register-fixed-marketplace" `
+            -Title "Register fixed bundled marketplace" `
+            -Reason "Codex needs an accessible marketplace source before chrome@openai-bundled and computer-use@openai-bundled can be installed." `
+            -Command "codex plugin marketplace remove openai-bundled; codex plugin marketplace add `"$fixedSource`"" `
+            -Risk "medium"
+
+        Add-RepairAction `
+            -Id "install-core-plugins" `
+            -Title "Install Browser, Chrome, and Computer Use plugins" `
+            -Reason "Reinstalling the three related bundled plugins can repair missing tool exposure after marketplace/cache corruption." `
+            -Command "codex plugin add browser@openai-bundled; codex plugin add chrome@openai-bundled; codex plugin add computer-use@openai-bundled" `
+            -Risk "medium"
+    }
+    else {
+        Add-RepairAction `
+            -Id "codex-cli-missing" `
+            -Title "Codex CLI not found" `
+            -Reason "Marketplace repair requires the codex CLI command." `
+            -Command "Install or expose the codex CLI in PATH, then rerun repair." `
+            -Risk "low"
+    }
+
+    Add-RepairAction `
+        -Id "restart-codex" `
+        -Title "Restart Codex Desktop" `
+        -Reason "Plugin tools are attached when Codex starts and when a thread is created." `
+        -Command "Restart Codex Desktop, then create a fresh thread and mention @computer." `
+        -Risk "low"
+}
+
+if ($Repair -and $Apply) {
+    $backupAction = $repairActions | Where-Object { $_.id -eq "backup-codex-state" } | Select-Object -First 1
+    try {
+        New-Item -ItemType Directory -Force $backupDir | Out-Null
+        if (Test-Path $configPath) {
+            Copy-Item $configPath $backupDir -Force
+        }
+        $globalState = Join-Path $codexHome "codex-global-state.json"
+        if (Test-Path $globalState) {
+            Copy-Item $globalState $backupDir -Force
+        }
+        $backupAction.applied = $true
+        $backupAction.result = "Backed up to $backupDir"
+    }
+    catch {
+        $backupAction.result = $_.Exception.Message
+    }
+
+    $bundledSource = Get-CodexBundledSourceCandidate
+    if ($bundledSource) {
+        $mirrorAction = $repairActions | Where-Object { $_.id -eq "mirror-bundled-source" } | Select-Object -First 1
+        try {
+            if (Test-Path $fixedSource) {
+                $previousSource = $fixedSource + ".previous-" + (Get-Date -Format "yyyyMMdd-HHmmss")
+                Move-Item $fixedSource $previousSource -Force
+            }
+            Copy-DirectoryBytes -Source $bundledSource -Destination $fixedSource
+            $mirrorAction.applied = $true
+            $mirrorAction.result = "Mirrored from $bundledSource"
+        }
+        catch {
+            $mirrorAction.result = $_.Exception.Message
+        }
+    }
+
+    $codexCommand = Get-Command "codex" -ErrorAction SilentlyContinue
+    if ($codexCommand -and (Test-Path $fixedSource)) {
+        $marketAction = $repairActions | Where-Object { $_.id -eq "register-fixed-marketplace" } | Select-Object -First 1
+        try {
+            [void](Invoke-External -FilePath $codexCommand.Source -Arguments @("plugin", "marketplace", "remove", "openai-bundled"))
+            $addResult = Invoke-External -FilePath $codexCommand.Source -Arguments @("plugin", "marketplace", "add", $fixedSource)
+            $marketAction.applied = $addResult.exit_code -eq 0
+            $marketAction.result = if ($addResult.exit_code -eq 0) { "Registered $fixedSource" } else { $addResult.stderr }
+        }
+        catch {
+            $marketAction.result = $_.Exception.Message
+        }
+
+        $installAction = $repairActions | Where-Object { $_.id -eq "install-core-plugins" } | Select-Object -First 1
+        try {
+            $pluginResults = @()
+            foreach ($plugin in @("browser@openai-bundled", "chrome@openai-bundled", "computer-use@openai-bundled")) {
+                $result = Invoke-External -FilePath $codexCommand.Source -Arguments @("plugin", "add", $plugin)
+                $pluginResults += "$plugin exit=$($result.exit_code)"
+            }
+            $installAction.applied = $true
+            $installAction.result = $pluginResults -join "; "
+        }
+        catch {
+            $installAction.result = $_.Exception.Message
+        }
+    }
+}
+
 $summary = [pscustomobject]@{
     tool = "codex-windows-plugin-doctor"
     version = "0.1.0"
@@ -210,6 +439,7 @@ $summary = [pscustomobject]@{
     codex_home = $codexHome
     checks = $checks
     repair_plan = $repairPlan
+    repair_actions = $repairActions
 }
 
 if ($Json) {
@@ -233,6 +463,24 @@ else {
     $lines.Add("Repair plan:")
     foreach ($step in $repairPlan) {
         $lines.Add("  - $step")
+    }
+    if ($Repair) {
+        $lines.Add("")
+        if ($Apply) {
+            $lines.Add("Repair actions applied:")
+        }
+        else {
+            $lines.Add("Repair actions (dry run; rerun with -Repair -Apply to execute):")
+        }
+        foreach ($action in $repairActions) {
+            $lines.Add("[$($action.risk)] $($action.title)")
+            $lines.Add("  Reason: $($action.reason)")
+            $lines.Add("  Command: $($action.command)")
+            if ($action.result) {
+                $lines.Add("  Result: $($action.result)")
+            }
+            $lines.Add("")
+        }
     }
     $output = $lines -join [Environment]::NewLine
 }
