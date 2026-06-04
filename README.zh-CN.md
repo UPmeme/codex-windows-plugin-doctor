@@ -2,6 +2,24 @@
 
 诊断并修复 Windows 上 Codex Desktop 的 Computer Use、Chrome、Browser 插件不可用问题。
 
+## 一条命令诊断
+
+```powershell
+.\scripts\codex-computer-use-doctor.ps1
+```
+
+查看修复计划：
+
+```powershell
+.\scripts\codex-computer-use-doctor.ps1 -Repair
+```
+
+执行保守修复：
+
+```powershell
+.\scripts\codex-computer-use-doctor.ps1 -Repair -Apply
+```
+
 常见症状：
 
 ```text
@@ -29,25 +47,7 @@ Windows 上 Codex Computer Use / Chrome 插件问题通常不是单一原因。�
 
 这个工具会先给出诊断报告，再给出修复计划。默认不改文件。
 
-## 快速使用
-
-诊断：
-
-```powershell
-.\scripts\codex-computer-use-doctor.ps1
-```
-
-查看修复计划：
-
-```powershell
-.\scripts\codex-computer-use-doctor.ps1 -Repair
-```
-
-执行保守修复：
-
-```powershell
-.\scripts\codex-computer-use-doctor.ps1 -Repair -Apply
-```
+## 更多用法
 
 生成 JSON：
 

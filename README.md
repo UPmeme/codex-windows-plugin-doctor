@@ -9,6 +9,24 @@
 Diagnose Codex Desktop Computer Use, Chrome, and Browser plugin availability
 problems on Windows.
 
+## Fast Path
+
+```powershell
+.\scripts\codex-computer-use-doctor.ps1
+```
+
+Preview a conservative repair plan:
+
+```powershell
+.\scripts\codex-computer-use-doctor.ps1 -Repair
+```
+
+Apply the repair plan:
+
+```powershell
+.\scripts\codex-computer-use-doctor.ps1 -Repair -Apply
+```
+
 Codex Desktop can use Computer Use to operate desktop apps, Chrome to work with
 logged-in browser sessions, and Browser for in-app web testing. On Windows,
 users can run into states where Computer Use or Chrome appears installed or
@@ -62,18 +80,6 @@ Save a report:
 
 ```powershell
 .\scripts\codex-computer-use-doctor.ps1 -OutFile .\reports\codex-plugin-report.txt
-```
-
-Preview a repair plan:
-
-```powershell
-.\scripts\codex-computer-use-doctor.ps1 -Repair
-```
-
-Apply the repair plan:
-
-```powershell
-.\scripts\codex-computer-use-doctor.ps1 -Repair -Apply
 ```
 
 `-Apply` backs up Codex config first, mirrors the bundled plugin source into the
